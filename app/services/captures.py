@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.db import get_db
 from app.services import audit as audit_svc
+from app.services import rework as rework_svc
 from app.services.errors import ServiceError
 
 
@@ -32,6 +33,8 @@ def get_batch(batch_id: int, db_path: str | None = None) -> dict:
         ).fetchall()
         data = dict(row)
         data["items"] = [dict(i) for i in items]
+        for it in data["items"]:
+            it["payload_fingerprint"] = rework_svc.payload_fingerprint(it.get("payload", ""))
         return data
 
 

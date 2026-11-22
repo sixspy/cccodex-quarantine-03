@@ -12,8 +12,12 @@ export async function renderSettings(el) {
             <tr>
               <td>${s.key}</td>
               <td>${s.label}</td>
-              <td><input data-key="${s.key}" value="${s.value}" /></td>
-              <td><button data-save="${s.key}">保存</button></td>
+              <td>${Number(s.readonly)
+                ? `<span class="chip pin-badge">${s.value}（只读）</span>`
+                : `<input data-key="${s.key}" value="${s.value}" />`}</td>
+              <td>${Number(s.readonly)
+                ? '<span class="muted">口径锁定，不可修改</span>'
+                : `<button data-save="${s.key}">保存</button>`}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -21,10 +25,14 @@ export async function renderSettings(el) {
   el.querySelectorAll('[data-save]').forEach((btn) => {
     btn.onclick = async () => {
       const input = el.querySelector(`input[data-key="${btn.dataset.save}"]`);
-      await api('/api/settings/update', {
-        method: 'POST',
-        body: JSON.stringify({ key: btn.dataset.save, value: input.value }),
-      });
+      try {
+        await api('/api/settings/update', {
+          method: 'POST',
+          body: JSON.stringify({ key: btn.dataset.save, value: input.value }),
+        });
+      } catch (e) {
+        alert(e.message || '保存失败');
+      }
       await renderSettings(el);
     };
   });

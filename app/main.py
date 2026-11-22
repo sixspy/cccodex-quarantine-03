@@ -12,6 +12,7 @@ from app.config import Config
 from app.seed import seed_if_needed
 from app.services import audit as audit_svc
 from app.services import captures as captures_svc
+from app.services import cleaning as cleaning_svc
 from app.services import policies as policies_svc
 from app.services import quarantine as quarantine_svc
 from app.services import reconcile as reconcile_svc
@@ -137,6 +138,11 @@ def create_app():
         def batch_close(request):
             _require(request)
             return _json(captures_svc.close_batch(int(request.matchdict["id"])))
+
+        def clean_intake(request):
+            _require(request)
+            body = _read_json(request)
+            return _json(cleaning_svc.intake_item(int(body.get("item_id") or 0)))
 
         # quarantine
         def bins_list(request):
@@ -321,6 +327,7 @@ def create_app():
         config.add_route("batch", "/api/batches/{id}")
         config.add_route("batch_items", "/api/batches/{id}/items")
         config.add_route("batch_close", "/api/batches/{id}/close")
+        config.add_route("clean_intake", "/api/cleaning/intake")
         config.add_route("bins", "/api/bins")
         config.add_route("rows", "/api/rows")
         config.add_route("enter", "/api/quarantine/enter")
@@ -356,6 +363,7 @@ def create_app():
         config.add_view(wrap(batch_create), route_name="batches", request_method="POST")
         config.add_view(wrap(batch_add_item), route_name="batch_items", request_method="POST")
         config.add_view(wrap(batch_close), route_name="batch_close", request_method="POST")
+        config.add_view(wrap(clean_intake), route_name="clean_intake", request_method="POST")
         config.add_view(wrap(bins_list), route_name="bins", request_method="GET")
         config.add_view(wrap(rows_list), route_name="rows", request_method="GET")
         config.add_view(wrap(enter_row), route_name="enter", request_method="POST")

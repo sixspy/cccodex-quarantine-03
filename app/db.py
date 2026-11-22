@@ -117,6 +117,16 @@ CREATE TABLE IF NOT EXISTS reconcile_reports (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS rework_pins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL UNIQUE REFERENCES rework_jobs(id),
+  item_key TEXT NOT NULL,
+  reason_code TEXT NOT NULL,
+  payload_fingerprint TEXT NOT NULL,
+  pin_source TEXT NOT NULL CHECK (pin_source IN ('物化包')),
+  pinned_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS lab_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
@@ -127,7 +137,52 @@ CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- 同一隔离行只许存在一个活跃回炉单（排队/执行中），从库层挡住并发抢开
+CREATE UNIQUE INDEX IF NOT EXISTS ux_rework_active_row
+ON rework_jobs(row_id)
+WHERE status IN ('排队','执行中');
 """
+
+# 只读台参数：前端不渲染输入框，服务端拒绝改值
+READONLY_SETTING_KEYS = ("rework_pin_mode",)
+
+
+def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """老库补结构：物化包表、只读钉点口径参数。"""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rework_pins (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          job_id INTEGER NOT NULL UNIQUE REFERENCES rework_jobs(id),
+          item_key TEXT NOT NULL,
+          reason_code TEXT NOT NULL,
+          payload_fingerprint TEXT NOT NULL,
+          pin_source TEXT NOT NULL CHECK (pin_source IN ('物化包')),
+          pinned_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_rework_active_row
+        ON rework_jobs(row_id)
+        WHERE status IN ('排队','执行中')
+        """
+    )
+    if "lab_settings" in {
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO lab_settings(key, value, label)
+            VALUES ('rework_pin_mode', '物化包', '回炉钉点口径（只读）')
+            """
+        )
 
 
 def ensure_db() -> Path:
@@ -135,7 +190,9 @@ def ensure_db() -> Path:
     path = Config.DATABASE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
+        conn.row_factory = sqlite3.Row
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
     return path
 
@@ -144,9 +201,11 @@ def ensure_db() -> Path:
 def get_db(db_path: str | Path | None = None):
     path = Path(db_path) if db_path else Config.DATABASE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA journal_mode=WAL")
     try:
         yield conn
         conn.commit()

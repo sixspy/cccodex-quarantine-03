@@ -7,7 +7,7 @@ export async function renderBins(el) {
     <div class="card">
       <h2>隔离舱</h2>
       <table>
-        <thead><tr><th>舱号</th><th>标题</th><th>状态</th><th>占用/容量</th><th>待复核</th></tr></thead>
+        <thead><tr><th>舱号</th><th>标题</th><th>状态</th><th>占用/容量</th><th>待复核</th><th>回炉中</th></tr></thead>
         <tbody>
           ${(bins.items || []).map((b) => `
             <tr>
@@ -16,6 +16,9 @@ export async function renderBins(el) {
               <td><span class="chip">${b.status}</span></td>
               <td>${b.row_count}/${b.capacity}</td>
               <td>${b.pending_count}</td>
+              <td>${b.reworking_count > 0
+                ? `<span class="chip pin-badge">回炉中 ${b.reworking_count}</span>`
+                : '<span class="muted">0</span>'}</td>
             </tr>`).join('')}
         </tbody>
       </table>

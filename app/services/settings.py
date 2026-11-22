@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.db import get_db
+from app.db import READONLY_SETTING_KEYS, get_db
 from app.services.errors import ServiceError
 
 
@@ -9,12 +9,17 @@ def list_settings(db_path: str | None = None) -> list[dict]:
         rows = conn.execute(
             "SELECT key, value, label FROM lab_settings ORDER BY key"
         ).fetchall()
-        return [dict(r) for r in rows]
+        out = [dict(r) for r in rows]
+        for r in out:
+            r["readonly"] = 1 if r["key"] in READONLY_SETTING_KEYS else 0
+        return out
 
 
 def update_setting(key: str, value: str, db_path: str | None = None) -> dict:
     if not key or value is None:
         raise ServiceError("参数不完整")
+    if key in READONLY_SETTING_KEYS:
+        raise ServiceError("回炉钉点口径为只读参数，不可修改", 403)
     with get_db(db_path) as conn:
         row = conn.execute(
             "SELECT key, value, label FROM lab_settings WHERE key=?", (key,)

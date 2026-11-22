@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 from app.db import get_db
 from app.services import audit as audit_svc
 from app.services.errors import ServiceError
@@ -65,13 +67,16 @@ def decide(
                 "UPDATE capture_items SET status='回炉中' WHERE id=?", (row["item_id"],)
             )
             n = conn.execute("SELECT COUNT(*) AS c FROM rework_jobs").fetchone()["c"] + 1
-            conn.execute(
-                """
-                INSERT INTO rework_jobs(job_code, row_id, status, message)
-                VALUES (?, ?, '排队', '复核驳回进入回炉')
-                """,
-                (f"RWK-{n:04d}", row["id"]),
-            )
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO rework_jobs(job_code, row_id, status, message)
+                    VALUES (?, ?, '排队', '复核驳回进入回炉')
+                    """,
+                    (f"RWK-{n:04d}", row["id"]),
+                )
+            except sqlite3.IntegrityError:
+                raise ServiceError("该隔离行已有活跃回炉单，禁止重复开单", 409)
         else:
             conn.execute(
                 "UPDATE quarantine_rows SET status='已废弃' WHERE id=?", (row["id"],)

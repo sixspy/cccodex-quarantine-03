@@ -61,6 +61,7 @@ export async function renderCaptures(el) {
   });
   el.querySelectorAll('[data-open]').forEach((btn) => {
     btn.onclick = async () => {
+      const openBtn = btn;
       const d = await api(`/api/batches/${btn.dataset.open}`);
       const box = el.querySelector('#detail');
       box.innerHTML = `
@@ -73,16 +74,31 @@ export async function renderCaptures(el) {
           <button id="addItem">追加条目</button>
         </div>
         <table>
-          <thead><tr><th>键</th><th>质量</th><th>状态</th></tr></thead>
+          <thead><tr><th>键</th><th>质量</th><th>状态</th><th>样本指纹</th><th>清洗入库</th></tr></thead>
           <tbody>
             ${(d.items || []).map((i) => `
               <tr>
                 <td>${i.item_key}</td>
                 <td><span class="chip ${i.quality === '合格' ? 'ok' : 'bad'}">${i.quality}</span></td>
                 <td>${i.status}</td>
+                <td class="muted">${(i.payload_fingerprint || '').replace('sha256:', '').slice(0, 12)}</td>
+                <td>${i.status === '回炉中' ? `<button data-intake="${i.id}">清洗入库</button>` : '<span class="muted">—</span>'}</td>
               </tr>`).join('')}
           </tbody>
         </table>`;
+      box.querySelectorAll('[data-intake]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/cleaning/intake', {
+              method: 'POST',
+              body: JSON.stringify({ item_id: Number(btn.dataset.intake) }),
+            });
+          } catch (e) {
+            alert(e.message || '清洗入库被拒');
+          }
+          openBtn.click();
+        };
+      });
       box.querySelector('#addItem').onclick = async () => {
         await api(`/api/batches/${d.id}/items`, {
           method: 'POST',
@@ -92,7 +108,7 @@ export async function renderCaptures(el) {
             payload: '{}',
           }),
         });
-        btn.click();
+        openBtn.click();
       };
     };
   });

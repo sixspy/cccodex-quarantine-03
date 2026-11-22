@@ -12,6 +12,7 @@ def seed_if_needed(db_path: str | None = None) -> None:
             ("max_bin_open", "3", "同时开放隔离舱上限"),
             ("auto_enter_bad", "1", "缺字段自动入舱"),
             ("rework_max_attempt", "3", "回炉最大次数"),
+            ("rework_pin_mode", "物化包", "回炉钉点口径（只读）"),
             ("reconcile_label", "隔离对账口径A", "对账口径标签"),
             ("audit_keep_days", "30", "审计保留天数"),
             ("policy_default_bin", "BIN-A", "规则默认入舱号"),
